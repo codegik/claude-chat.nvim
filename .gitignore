@@ -1,0 +1,8 @@
+# Neovim / Lua
+*.luac
+tags
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*~
