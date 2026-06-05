@@ -1,16 +1,24 @@
 # claude-chat.nvim
 
-A minimal Neovim chat sidebar for [Claude Code](https://claude.com/claude-code).
-It does **not** use the Anthropic API — it shells out to the `claude` CLI you
-already have installed.
+A Neovim sidebar that hosts the **interactive [Claude Code](https://claude.com/claude-code) TUI**.
 
-- The first message starts a fresh session: `claude -p "<message>"`
-- Every following message continues it: `claude -p --continue "<message>"`
-- Calls run asynchronously (`vim.system`), so Neovim never blocks.
+It does not use the Anthropic API and it does not wrap `claude -p`. Instead it
+runs the real `claude` terminal UI inside a Neovim terminal buffer. Because it is
+the actual TUI, everything behaves exactly like running `claude` in a terminal:
+
+- streaming replies and multi-turn conversation
+- **interactive permission prompts you answer yourself** (e.g. "Allow running
+  `bundle exec jekyll build`?") — Claude asks, you decide
+- option selection, slash commands, `/clear`, etc.
+
+> Earlier versions of this plugin shelled out to `claude -p --continue`. That
+> approach can never show interactive permission prompts: `-p` (print) mode
+> computes one reply and exits, with no live process to ask you anything. Hosting
+> the interactive TUI is the only way to get "Claude asks, you decide".
 
 ## Requirements
 
-- Neovim 0.10+ (uses `vim.system`)
+- Neovim 0.10+ (uses `jobstart({ term = true })`)
 - The `claude` CLI on your `PATH` (`claude --version`)
 
 ## Install (lazy.nvim, local dev)
@@ -48,16 +56,23 @@ When you publish to GitHub, drop `dev = true` (or `fallback` will clone it).
 | Action | Command / key |
 |--------|---------------|
 | Toggle the sidebar | `:ClaudeChat` (or `<leader>ai`) |
-| Send the message | `<CR>` (Enter), in the input window |
-| New line in the message | `<S-CR>` (Shift+Enter) |
-| Reset the session | `<C-l>`, or `:ClaudeChatReset` |
-| Close the sidebar | `q` |
+| Talk to Claude | Just type in the terminal — it's the normal Claude TUI |
+| Answer a permission prompt | Use the keys the prompt shows (e.g. `y`/`n`, arrows + `<CR>`) |
+| Back to the editor / other window | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` |
+| Resize the sidebar | `<C-Left>` / `<C-Right>` (and `<C-Up>` / `<C-Down>`) |
+| Hide the sidebar (Claude keeps running) | `<C-q>` |
+| Leave terminal mode (to scroll/copy) | `<C-\><C-n>`, then normal Neovim keys |
+| New conversation | `:ClaudeChatReset` |
 
-Autocompletion is disabled in the chat buffers.
+The sidebar is a real terminal, so by default every keystroke goes to Claude. The
+keys above are the exception: they are terminal-mode mappings (scoped to the Claude
+buffer) that Neovim intercepts, so you can jump back to the editor, resize, or hide
+the sidebar without leaving the TUI. They mirror LazyVim's window keys and are all
+configurable (see below) — set one to `false` to free that key for Claude.
 
-Type in the bottom input box, send, and the reply appears in the transcript
-above. Resetting forgets the conversation so the next message starts a new
-`claude -p` session.
+Navigating away with `<C-h>` and back with `<C-l>` keeps the conversation running;
+you return to the same live session and land straight in insert mode. Toggling the
+sidebar closed only **hides** it. `:ClaudeChatReset` stops the process and starts fresh.
 
 ## Configuration
 
@@ -65,24 +80,26 @@ above. Resetting forgets the conversation so the next message starts a new
 
 ```lua
 require("claude-chat").setup({
-  cli = "claude",          -- CLI executable
-  extra_args = {},         -- args added to every call, e.g. { "--model", "sonnet" }
-  width = 64,              -- sidebar width
-  position = "right",      -- "right" | "left"
-  input_height = 6,        -- input window height
-  timeout = 180000,        -- per-request timeout (ms)
-  keymaps = {
-    submit = "<CR>",     -- Enter sends (normal + insert)
-    newline = "<S-CR>",  -- Shift+Enter inserts a newline
-    close = "q",
-    reset = "<C-l>",
+  cli = "claude",       -- CLI executable
+  extra_args = {},      -- args passed to the TUI, e.g. { "--model", "sonnet" }
+  width = 80,           -- sidebar width
+  position = "right",   -- "right" | "left"
+  cwd = nil,            -- working dir for the session (nil = Neovim's cwd)
+  start_insert = true,  -- enter terminal mode when the sidebar opens
+  keymaps = {           -- terminal-mode keys, scoped to the Claude buffer
+    hide = "<C-q>",
+    nav = { left = "<C-h>", down = "<C-j>", up = "<C-k>", right = "<C-l>" },
+    resize = { left = "<C-Left>", right = "<C-Right>", up = "<C-Up>", down = "<C-Down>" },
   },
 })
 ```
 
+Because Claude runs in Neovim's working directory, "build/test the project" acts
+on whatever folder you launched Neovim from (override with `cwd`).
+
 ## Testing environment
 
-This plugin has been developed and tested on:
+Developed and tested on:
 
 | Component | Value |
 |-----------|-------|
@@ -90,25 +107,4 @@ This plugin has been developed and tested on:
 | Terminal | Alacritty |
 | Neovim | 0.12.2 |
 | Plugin manager | lazy.nvim (LazyVim distro) |
-| Completion | blink.cmp (disabled inside the chat buffers) |
 | `claude` CLI | 2.1.x |
-
-### Shift+Enter note for this setup
-
-Alacritty does not implement the kitty keyboard protocol, so it cannot natively
-distinguish Shift+Enter from Enter. Under Omarchy, Alacritty is configured to send
-`ESC`+`CR` (`\r`) for Shift+Enter — this is intentional, because the Claude
-Code CLI and other TUIs rely on it for multiline input. The plugin therefore
-treats that `ESC`+`CR` sequence (in addition to `<S-CR>`) as "insert a newline",
-so the terminal config is left untouched. Plain Enter sends the message.
-
-On terminals that *do* support the kitty keyboard protocol (Kitty, Ghostty, Foot),
-`<S-CR>` is delivered directly and the `ESC`+`CR` fallback is not needed.
-
-## How sessions work
-
-`--continue` resumes the **most recent** Claude conversation. If you run other
-`claude` sessions in the same directory while chatting, a follow-up could attach
-to the wrong one. A more robust scheme is to capture the session id from
-`--output-format json` on the first call and use `--resume <id>` after — a
-possible future enhancement.

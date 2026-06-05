@@ -4,21 +4,37 @@ local M = {}
 M.defaults = {
   -- Path/name of the Claude Code CLI executable.
   cli = "claude",
-  -- Extra args appended to every CLI invocation (e.g. { "--model", "sonnet" }).
+  -- Extra args passed to the interactive CLI (e.g. { "--model", "sonnet" }).
   extra_args = {},
   -- Sidebar width in columns.
-  width = 64,
+  width = 80,
   -- Which side the sidebar opens on: "right" or "left".
   position = "right",
-  -- Height of the input window in rows.
-  input_height = 6,
-  -- Per-request timeout in milliseconds.
-  timeout = 180000,
+  -- Working directory for the Claude session. nil = Neovim's current directory.
+  cwd = nil,
+  -- Enter terminal (insert) mode automatically when the sidebar opens.
+  start_insert = true,
+  -- Terminal-mode keymaps, scoped to the Claude buffer. They are intercepted by
+  -- Neovim instead of being sent to Claude, so you can navigate/resize/hide while
+  -- the TUI is focused. Set any entry to false/"" to disable it (and free the key
+  -- for Claude). Defaults mirror LazyVim's window keys.
   keymaps = {
-    submit = "<CR>", -- send the message (normal and insert mode, in the input window)
-    newline = "<S-CR>", -- insert a newline (insert mode); see README for the Alacritty note
-    close = "q", -- normal mode, in either window
-    reset = "<C-l>", -- normal mode, in either window
+    -- Hide the sidebar without stopping Claude.
+    hide = "<C-q>",
+    -- Move focus to another window (e.g. back to the editor).
+    nav = {
+      left = "<C-h>",
+      down = "<C-j>",
+      up = "<C-k>",
+      right = "<C-l>",
+    },
+    -- Resize the sidebar window.
+    resize = {
+      left = "<C-Left>",
+      right = "<C-Right>",
+      up = "<C-Up>",
+      down = "<C-Down>",
+    },
   },
 }
 

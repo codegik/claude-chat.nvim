@@ -1,205 +1,124 @@
 local config = require("claude-chat.config")
-local session = require("claude-chat.session")
 
--- The chat sidebar: a read-only transcript window on top of a small input window.
+-- The chat sidebar hosts the *interactive* Claude Code TUI inside a terminal
+-- buffer. Because it is the real TUI, everything works exactly like running
+-- `claude` in a terminal: streaming replies, multi-turn, and — crucially —
+-- interactive permission prompts that you answer yourself.
 local M = {}
 
-M.transcript_buf = nil
-M.transcript_win = nil
-M.input_buf = nil
-M.input_win = nil
-
--- Full transcript content, kept as a list of lines and re-rendered on change.
-M.lines = {}
-M.busy = false
-
-local function header(label)
-  local width = config.options.width
-  local prefix = "── " .. label .. " "
-  local fill = math.max(1, width - vim.fn.strdisplaywidth(prefix))
-  return prefix .. string.rep("─", fill)
-end
-
-local function render()
-  if not (M.transcript_buf and vim.api.nvim_buf_is_valid(M.transcript_buf)) then
-    return
-  end
-
-  local out = vim.deepcopy(M.lines)
-  if M.busy then
-    if #out > 0 then
-      table.insert(out, "")
-    end
-    table.insert(out, "⏳ Claude is thinking…")
-  end
-
-  vim.bo[M.transcript_buf].modifiable = true
-  vim.api.nvim_buf_set_lines(M.transcript_buf, 0, -1, false, out)
-  vim.bo[M.transcript_buf].modifiable = false
-
-  -- Keep the latest content in view.
-  if M.transcript_win and vim.api.nvim_win_is_valid(M.transcript_win) then
-    local count = vim.api.nvim_buf_line_count(M.transcript_buf)
-    pcall(vim.api.nvim_win_set_cursor, M.transcript_win, { count, 0 })
-  end
-end
-
-local function add_message(label, text)
-  if #M.lines > 0 then
-    table.insert(M.lines, "")
-  end
-  table.insert(M.lines, header(label))
-  for _, line in ipairs(vim.split(text, "\n", { plain = true })) do
-    table.insert(M.lines, line)
-  end
-  render()
-end
+M.buf = nil -- terminal buffer running claude
+M.win = nil -- sidebar window currently showing it
+M.job = nil -- job id of the claude process
 
 function M.is_open()
-  return M.transcript_win ~= nil and vim.api.nvim_win_is_valid(M.transcript_win)
+  return M.win ~= nil and vim.api.nvim_win_is_valid(M.win)
 end
 
-function M.submit()
-  if session.running then
-    vim.notify("Claude is still responding…", vim.log.levels.WARN)
-    return
-  end
+-- True when a Claude process is still running in a live buffer.
+local function session_alive()
+  return M.job ~= nil and M.buf ~= nil and vim.api.nvim_buf_is_valid(M.buf)
+end
 
-  local input = vim.api.nvim_buf_get_lines(M.input_buf, 0, -1, false)
-  local prompt = vim.trim(table.concat(input, "\n"))
-  if prompt == "" then
-    return
-  end
+local function open_window(opts)
+  local split = (opts.position == "left") and "topleft vsplit" or "botright vsplit"
+  vim.cmd(split)
+  M.win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_width(M.win, opts.width)
+  vim.wo[M.win].number = false
+  vim.wo[M.win].relativenumber = false
+  vim.wo[M.win].signcolumn = "no"
+  vim.wo[M.win].winfixwidth = true
+  vim.wo[M.win].winbar = " Claude"
+end
 
-  vim.api.nvim_buf_set_lines(M.input_buf, 0, -1, false, {})
-  add_message("You", prompt)
-  M.busy = true
-  render()
+local function start_terminal(opts)
+  -- The current buffer becomes the terminal, so create one and show it first.
+  M.buf = vim.api.nvim_create_buf(false, false)
+  vim.api.nvim_win_set_buf(M.win, M.buf)
 
-  session.send(prompt, {
-    on_done = function(text, err)
-      M.busy = false
-      if err then
-        add_message("Error", err)
-      else
-        add_message("Claude", (text and text ~= "") and text or "(empty response)")
-      end
+  local cmd = { opts.cli }
+  vim.list_extend(cmd, opts.extra_args)
+
+  M.job = vim.fn.jobstart(cmd, {
+    term = true,
+    cwd = opts.cwd or vim.fn.getcwd(),
+    on_exit = function()
+      M.job = nil
     end,
   })
-end
 
-local function setup_keymaps()
-  local km = config.options.keymaps
-  local function map(buf, mode, lhs, fn)
-    if not lhs or lhs == "" then
-      return
-    end
-    vim.keymap.set(mode, lhs, fn, { buffer = buf, nowait = true, silent = true })
-  end
-
-  -- Enter sends, in normal and insert mode.
-  map(M.input_buf, "n", km.submit, M.submit)
-  map(M.input_buf, "i", km.submit, M.submit)
-
-  -- Shift+Enter inserts a literal newline (remap=false -> built-in <CR>).
-  -- Terminals with the kitty keyboard protocol deliver this as <S-CR>; Alacritty
-  -- under Omarchy instead sends ESC+CR, so map that sequence too.
-  local function newline_map(lhs)
+  -- Terminal-mode keymaps scoped to this buffer. Neovim intercepts them before
+  -- they reach Claude, so window navigation/resize/hide work while the TUI is
+  -- focused. <Cmd> mappings run without leaving terminal mode.
+  local km = opts.keymaps
+  local function tmap(lhs, rhs)
     if lhs and lhs ~= "" then
-      vim.keymap.set("i", lhs, "<CR>", { buffer = M.input_buf, nowait = true, remap = false })
+      vim.keymap.set("t", lhs, rhs, { buffer = M.buf, nowait = true, silent = true })
     end
   end
-  newline_map(km.newline)
-  newline_map("<Esc><CR>")
 
-  for _, buf in ipairs({ M.input_buf, M.transcript_buf }) do
-    map(buf, "n", km.close, M.close)
-    map(buf, "n", km.reset, M.reset)
+  tmap(km.hide, function()
+    M.close()
+  end)
+
+  -- Move focus to another window (leaves the terminal; lands in the target window).
+  tmap(km.nav.left, "<Cmd>wincmd h<CR>")
+  tmap(km.nav.down, "<Cmd>wincmd j<CR>")
+  tmap(km.nav.up, "<Cmd>wincmd k<CR>")
+  tmap(km.nav.right, "<Cmd>wincmd l<CR>")
+
+  -- Resize the sidebar (stays focused on Claude).
+  tmap(km.resize.left, "<Cmd>vertical resize -2<CR>")
+  tmap(km.resize.right, "<Cmd>vertical resize +2<CR>")
+  tmap(km.resize.up, "<Cmd>resize +2<CR>")
+  tmap(km.resize.down, "<Cmd>resize -2<CR>")
+
+  -- Re-enter insert mode when returning to the Claude window, so you can type
+  -- immediately after navigating away and back.
+  if opts.start_insert then
+    vim.api.nvim_create_autocmd("WinEnter", {
+      buffer = M.buf,
+      callback = function()
+        if vim.api.nvim_get_current_buf() == M.buf then
+          vim.cmd("startinsert")
+        end
+      end,
+    })
   end
-end
-
-local function ensure_buffers()
-  if not (M.transcript_buf and vim.api.nvim_buf_is_valid(M.transcript_buf)) then
-    M.transcript_buf = vim.api.nvim_create_buf(false, true)
-    vim.bo[M.transcript_buf].buftype = "nofile"
-    vim.bo[M.transcript_buf].bufhidden = "hide"
-    vim.bo[M.transcript_buf].swapfile = false
-    vim.bo[M.transcript_buf].filetype = "markdown"
-    vim.bo[M.transcript_buf].modifiable = false
-    pcall(vim.api.nvim_buf_set_name, M.transcript_buf, "ClaudeChat://transcript")
-  end
-
-  if not (M.input_buf and vim.api.nvim_buf_is_valid(M.input_buf)) then
-    M.input_buf = vim.api.nvim_create_buf(false, true)
-    vim.bo[M.input_buf].buftype = "nofile"
-    vim.bo[M.input_buf].bufhidden = "hide"
-    vim.bo[M.input_buf].swapfile = false
-    pcall(vim.api.nvim_buf_set_name, M.input_buf, "ClaudeChat://input")
-  end
-
-  -- Disable autocompletion in the chat buffers (respected by blink.cmp/nvim-cmp).
-  vim.b[M.transcript_buf].completion = false
-  vim.b[M.input_buf].completion = false
 end
 
 function M.open()
   local opts = config.ensure()
 
   if M.is_open() then
-    vim.api.nvim_set_current_win(M.input_win)
+    vim.api.nvim_set_current_win(M.win)
+    if opts.start_insert then
+      vim.cmd("startinsert")
+    end
     return
   end
 
-  ensure_buffers()
+  open_window(opts)
 
-  -- Transcript: a full-height vertical split on the chosen side.
-  local split = (opts.position == "left") and "topleft vsplit" or "botright vsplit"
-  vim.cmd(split)
-  M.transcript_win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(M.transcript_win, M.transcript_buf)
-  vim.api.nvim_win_set_width(M.transcript_win, opts.width)
-  vim.wo[M.transcript_win].number = false
-  vim.wo[M.transcript_win].relativenumber = false
-  vim.wo[M.transcript_win].signcolumn = "no"
-  vim.wo[M.transcript_win].wrap = true
-  vim.wo[M.transcript_win].winfixwidth = true
-  vim.wo[M.transcript_win].winbar = " Claude Chat"
+  -- Reuse the live session if one exists; otherwise launch a fresh TUI.
+  if session_alive() then
+    vim.api.nvim_win_set_buf(M.win, M.buf)
+  else
+    start_terminal(opts)
+  end
 
-  -- Input: a short split below the transcript, sharing the same column.
-  vim.cmd("belowright split")
-  M.input_win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(M.input_win, M.input_buf)
-  vim.api.nvim_win_set_height(M.input_win, opts.input_height)
-  vim.wo[M.input_win].number = false
-  vim.wo[M.input_win].relativenumber = false
-  vim.wo[M.input_win].signcolumn = "no"
-  vim.wo[M.input_win].wrap = true
-  vim.wo[M.input_win].winfixheight = true
-  vim.wo[M.input_win].winbar = " Message — "
-    .. opts.keymaps.submit
-    .. " send · "
-    .. opts.keymaps.newline
-    .. " newline · "
-    .. opts.keymaps.reset
-    .. " reset · "
-    .. opts.keymaps.close
-    .. " close"
-
-  setup_keymaps()
-  render()
-
-  vim.api.nvim_set_current_win(M.input_win)
-  vim.cmd("startinsert")
+  if opts.start_insert then
+    vim.cmd("startinsert")
+  end
 end
 
+-- Hide the sidebar window. The Claude process keeps running in the background;
+-- reopening with M.open() returns to the same live session.
 function M.close()
-  for _, win in ipairs({ M.input_win, M.transcript_win }) do
-    if win and vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
-    end
+  if M.is_open() then
+    vim.api.nvim_win_close(M.win, true)
   end
-  M.input_win = nil
-  M.transcript_win = nil
+  M.win = nil
 end
 
 function M.toggle()
@@ -210,11 +129,23 @@ function M.toggle()
   end
 end
 
+-- Stop the current Claude process and start a brand-new session.
 function M.reset()
-  session.reset()
-  M.lines = {}
-  M.busy = false
-  add_message("System", "Session reset. Your next message starts a new conversation.")
+  local was_open = M.is_open()
+
+  if M.job then
+    vim.fn.jobstop(M.job)
+    M.job = nil
+  end
+  M.close()
+  if M.buf and vim.api.nvim_buf_is_valid(M.buf) then
+    vim.api.nvim_buf_delete(M.buf, { force = true })
+  end
+  M.buf = nil
+
+  if was_open then
+    M.open()
+  end
 end
 
 return M
