@@ -48,9 +48,12 @@ When you publish to GitHub, drop `dev = true` (or `fallback` will clone it).
 | Action | Command / key |
 |--------|---------------|
 | Toggle the sidebar | `:ClaudeChat` (or `<leader>ai`) |
-| Send the message | `<CR>` (normal) / `<C-s>` (insert), in the input window |
+| Send the message | `<CR>` (Enter), in the input window |
+| New line in the message | `<S-CR>` (Shift+Enter) |
 | Reset the session | `<C-l>`, or `:ClaudeChatReset` |
 | Close the sidebar | `q` |
+
+Autocompletion is disabled in the chat buffers.
 
 Type in the bottom input box, send, and the reply appears in the transcript
 above. Resetting forgets the conversation so the next message starts a new
@@ -69,13 +72,38 @@ require("claude-chat").setup({
   input_height = 6,        -- input window height
   timeout = 180000,        -- per-request timeout (ms)
   keymaps = {
-    submit = "<CR>",
-    submit_insert = "<C-s>",
+    submit = "<CR>",     -- Enter sends (normal + insert)
+    newline = "<S-CR>",  -- Shift+Enter inserts a newline
     close = "q",
     reset = "<C-l>",
   },
 })
 ```
+
+## Testing environment
+
+This plugin has been developed and tested on:
+
+| Component | Value |
+|-----------|-------|
+| OS / WM | Arch Linux (Omarchy) + Hyprland |
+| Terminal | Alacritty |
+| Neovim | 0.12.2 |
+| Plugin manager | lazy.nvim (LazyVim distro) |
+| Completion | blink.cmp (disabled inside the chat buffers) |
+| `claude` CLI | 2.1.x |
+
+### Shift+Enter note for this setup
+
+Alacritty does not implement the kitty keyboard protocol, so it cannot natively
+distinguish Shift+Enter from Enter. Under Omarchy, Alacritty is configured to send
+`ESC`+`CR` (`\r`) for Shift+Enter — this is intentional, because the Claude
+Code CLI and other TUIs rely on it for multiline input. The plugin therefore
+treats that `ESC`+`CR` sequence (in addition to `<S-CR>`) as "insert a newline",
+so the terminal config is left untouched. Plain Enter sends the message.
+
+On terminals that *do* support the kitty keyboard protocol (Kitty, Ghostty, Foot),
+`<S-CR>` is delivered directly and the `ESC`+`CR` fallback is not needed.
 
 ## How sessions work
 

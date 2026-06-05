@@ -97,8 +97,20 @@ local function setup_keymaps()
     vim.keymap.set(mode, lhs, fn, { buffer = buf, nowait = true, silent = true })
   end
 
+  -- Enter sends, in normal and insert mode.
   map(M.input_buf, "n", km.submit, M.submit)
-  map(M.input_buf, "i", km.submit_insert, M.submit)
+  map(M.input_buf, "i", km.submit, M.submit)
+
+  -- Shift+Enter inserts a literal newline (remap=false -> built-in <CR>).
+  -- Terminals with the kitty keyboard protocol deliver this as <S-CR>; Alacritty
+  -- under Omarchy instead sends ESC+CR, so map that sequence too.
+  local function newline_map(lhs)
+    if lhs and lhs ~= "" then
+      vim.keymap.set("i", lhs, "<CR>", { buffer = M.input_buf, nowait = true, remap = false })
+    end
+  end
+  newline_map(km.newline)
+  newline_map("<Esc><CR>")
 
   for _, buf in ipairs({ M.input_buf, M.transcript_buf }) do
     map(buf, "n", km.close, M.close)
@@ -124,6 +136,10 @@ local function ensure_buffers()
     vim.bo[M.input_buf].swapfile = false
     pcall(vim.api.nvim_buf_set_name, M.input_buf, "ClaudeChat://input")
   end
+
+  -- Disable autocompletion in the chat buffers (respected by blink.cmp/nvim-cmp).
+  vim.b[M.transcript_buf].completion = false
+  vim.b[M.input_buf].completion = false
 end
 
 function M.open()
@@ -162,6 +178,8 @@ function M.open()
   vim.wo[M.input_win].winbar = " Message — "
     .. opts.keymaps.submit
     .. " send · "
+    .. opts.keymaps.newline
+    .. " newline · "
     .. opts.keymaps.reset
     .. " reset · "
     .. opts.keymaps.close

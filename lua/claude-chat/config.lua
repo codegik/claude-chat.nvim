@@ -15,8 +15,8 @@ M.defaults = {
   -- Per-request timeout in milliseconds.
   timeout = 180000,
   keymaps = {
-    submit = "<CR>", -- normal mode, in the input window
-    submit_insert = "<C-s>", -- insert mode, in the input window
+    submit = "<CR>", -- send the message (normal and insert mode, in the input window)
+    newline = "<S-CR>", -- insert a newline (insert mode); see README for the Alacritty note
     close = "q", -- normal mode, in either window
     reset = "<C-l>", -- normal mode, in either window
   },
