@@ -46,8 +46,8 @@ local function start_terminal(opts, prime_buf)
   if opts.ide_integration ~= false and ide.start(cwd, prime_buf) then
     env = ide.env()
     -- Pre-approve tools so Claude uses them without a permission prompt.
-    -- "mcp__ide" allows the whole IDE server; Edit/Write/MultiEdit make the
-    -- diff's :w/q the single approval point.
+    -- "mcp__ide" allows the whole IDE server; Edit/Write/MultiEdit let Claude
+    -- apply edits without its own "make this edit?" prompt.
     local allowed = {}
     if opts.auto_allow_ide_tools ~= false then
       table.insert(allowed, "mcp__ide")

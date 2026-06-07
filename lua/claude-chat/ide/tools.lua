@@ -285,21 +285,10 @@ local SCHEMAS = {
   },
 }
 
--- Diff tools are only advertised when ide_diff is enabled; otherwise Claude
--- falls back to its own inline diff + approval prompt.
-local DIFF_TOOLS = { openDiff = true, close_tab = true, closeAllDiffTabs = true }
-
-local function diff_enabled()
-  return require("claude-chat.config").ensure().ide_diff == true
-end
-
 function M.list()
-  local with_diff = diff_enabled()
   local tools = {}
   for name, spec in pairs(SCHEMAS) do
-    if with_diff or not DIFF_TOOLS[name] then
-      tools[#tools + 1] = { name = name, description = spec.desc, inputSchema = spec.input }
-    end
+    tools[#tools + 1] = { name = name, description = spec.desc, inputSchema = spec.input }
   end
   return tools
 end
@@ -307,10 +296,6 @@ end
 -- Dispatch a tool call. cb(result) is invoked when done (async for openDiff).
 function M.call(name, args, cb)
   args = args or {}
-  if DIFF_TOOLS[name] and not diff_enabled() then
-    cb(text_content("Error: IDE diffs are disabled; use your own edit flow."))
-    return
-  end
   if name == "openDiff" then
     local ok, err = pcall(diff.open, args, cb)
     if not ok then

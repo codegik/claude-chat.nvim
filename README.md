@@ -96,7 +96,6 @@ require("claude-chat").setup({
   ide_integration = true, -- editor awareness via the WebSocket MCP server
   auto_allow_ide_tools = true, -- pass --allowedTools mcp__ide (no per-call prompt)
   auto_allow_edits = false, -- also allow Edit/Write/MultiEdit (no edit prompt)
-  ide_diff = false,     -- show edits as a Neovim diff instead of Claude's inline diff
   keymaps = {           -- terminal-mode keys, scoped to the Claude buffer
     hide = "<C-q>",
     nav = { left = "<C-h>", down = "<C-j>", up = "<C-k>", right = "<C-l>" },
@@ -125,8 +124,7 @@ How it works:
 3. The plugin sends `selection_changed` as you move/select, and exposes MCP tools:
    `getCurrentSelection`, `getLatestSelection`, `getOpenEditors`,
    `getWorkspaceFolders`, `getDiagnostics`, `openFile`, `checkDocumentDirty`,
-   `saveDocument`. The diff tools (`openDiff`, `close_tab`, `closeAllDiffTabs`)
-   are only advertised when `ide_diff = true`.
+   `saveDocument`, and the diff tools `openDiff`, `close_tab`, `closeAllDiffTabs`.
 
 By default the plugin launches the CLI with `--allowedTools mcp__ide` so Claude
 uses these tools without a permission prompt on every call (set
@@ -135,17 +133,17 @@ Claude connecting is fully automatic — you never run anything by hand.
 
 ### Editing
 
-By default Claude shows its proposed edits **inline in its own TUI** and asks
-for approval there — the plugin does not pop a second diff in the editor. To
-skip even that prompt, set `auto_allow_edits = true` (pre-approves
-`Edit`/`Write`/`MultiEdit`).
+When Claude proposes an edit, the plugin shows it as a **live diff preview** in
+the editor — current vs. proposed, side by side (in throwaway scratch buffers),
+to the left of the Claude sidebar. You approve or reject in the **Claude console**
+as usual; the preview is read-only and just for context (press `q` to dismiss it
+early). Once you confirm and Claude writes the file, the preview closes
+automatically and the editor shows the updated file, with focus back in the
+console.
 
-If you'd rather review edits as a **native Neovim diff**, set `ide_diff = true`.
-The plugin then advertises the `openDiff` tool and opens a diff tab (current vs.
-proposed, in throwaway scratch buffers): `:w` to accept (signals `FILE_SAVED`),
-`q` to reject (`DIFF_REJECTED`). The plugin never writes the file itself — Claude
-does the real write — and focus returns to the sidebar in terminal mode when the
-diff closes.
+The plugin never writes the file itself — Claude does the real write. To skip
+Claude's own "make this edit?" prompt, set `auto_allow_edits = true`
+(pre-approves `Edit`/`Write`/`MultiEdit`).
 
 The server binds to localhost only and rejects any connection whose
 `x-claude-code-ide-authorization` header doesn't match the session token. The

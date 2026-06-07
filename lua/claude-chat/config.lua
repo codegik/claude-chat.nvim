@@ -24,10 +24,6 @@ M.defaults = {
   -- Claude applies edits without a "Do you want to make this edit?" prompt.
   -- Off by default so nothing is written without an explicit confirmation.
   auto_allow_edits = false,
-  -- Show proposed edits as a diff in a Neovim tab (the `openDiff` MCP tool).
-  -- Off by default because Claude's own TUI already renders the diff and asks
-  -- for approval; enabling this adds a second, separate diff in the editor.
-  ide_diff = false,
   -- Log verbosity: "off" | "error" | "warn" | "info" | "debug".
   -- Logs are written to stdpath("log").."/claude-chat.log" (:ClaudeChatLog).
   log_level = "info",

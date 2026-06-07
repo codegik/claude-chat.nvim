@@ -23,7 +23,7 @@ describe("ide.mcp + tools", function()
   local tmp, file
 
   before_each(function()
-    require("claude-chat.config").setup({ ide_diff = true })
+    require("claude-chat.config").setup()
     tmp = vim.fn.tempname()
     vim.fn.mkdir(tmp, "p")
     file = tmp .. "/README.md"
@@ -63,18 +63,11 @@ describe("ide.mcp + tools", function()
     assert.is_true(names["openFile"])
   end)
 
-  it("advertises diff tools only when ide_diff is enabled", function()
-    require("claude-chat.config").setup({ ide_diff = true })
-    assert.is_true(tool_names()["openDiff"])
-
-    require("claude-chat.config").setup({ ide_diff = false })
+  it("always advertises the diff tools", function()
     local names = tool_names()
-    assert.is_nil(names["openDiff"])
-    assert.is_nil(names["close_tab"])
-    -- read tools remain available
-    assert.is_true(names["getOpenEditors"])
-
-    require("claude-chat.config").setup({ ide_diff = true })
+    assert.is_true(names["openDiff"])
+    assert.is_true(names["close_tab"])
+    assert.is_true(names["closeAllDiffTabs"])
   end)
 
   it("getOpenEditors reports the active file", function()
