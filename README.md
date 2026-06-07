@@ -96,6 +96,8 @@ require("claude-chat").setup({
   ide_integration = true, -- editor awareness via the WebSocket MCP server
   auto_allow_ide_tools = true, -- pass --allowedTools mcp__ide (no per-call prompt)
   auto_allow_edits = false, -- also allow Edit/Write/MultiEdit (no edit prompt)
+  open_file_tool = true,    -- expose an open_file tool so "open the readme" opens it
+  open_in_editor_hint = true, -- nudge Claude to prefer open_file over its Read tool
   keymaps = {           -- terminal-mode keys, scoped to the Claude buffer
     hide = "<C-q>",
     nav = { left = "<C-h>", down = "<C-j>", up = "<C-k>", right = "<C-l>" },
@@ -130,6 +132,21 @@ By default the plugin launches the CLI with `--allowedTools mcp__ide` so Claude
 uses these tools without a permission prompt on every call (set
 `auto_allow_ide_tools = false` to be prompted instead). The server starting and
 Claude connecting is fully automatic — you never run anything by hand.
+
+### Opening files in the editor
+
+Asking *"open the readme"* should put the file in your editor — but Claude Code's
+IDE channel keeps `openFile` for its **own** use and never offers it to the model
+(the only IDE tools the model can call are `getDiagnostics` and `executeCode`).
+Left alone, Claude just reads and summarizes the file instead.
+
+So the plugin also runs a **separate stdio MCP server** (`scripts/mcp_bridge.lua`,
+launched with the same `nvim` binary) that exposes an `open_file` tool the model
+*can* call. When invoked, it connects back to your running Neovim over RPC and
+opens the file in a real editor window. It's pre-approved via
+`--allowedTools mcp__claude-chat`, and a short system-prompt hint nudges Claude to
+prefer it over `Read` for "open/show/go to" requests. Turn either off with
+`open_file_tool = false` / `open_in_editor_hint = false`.
 
 ### Editing
 

@@ -108,6 +108,26 @@ describe("ide.mcp + tools", function()
     assert.is_truthy(data.message:match("Document not open"))
   end)
 
+  it("openFile opens the file in a real editor window", function()
+    local other = tmp .. "/other.txt"
+    vim.fn.writefile({ "alpha", "beta", "gamma" }, other)
+    vim.cmd("enew") -- a normal (non-terminal) editor window to receive the file
+
+    local reply = call("tools/call", { name = "openFile", arguments = { filePath = other } })
+    assert.is_truthy(reply.result.content[1].text:match("Opened"))
+    assert.equals(vim.fs.normalize(other), vim.fs.normalize(vim.api.nvim_buf_get_name(0)))
+  end)
+
+  it("open_in_editor jumps the cursor to startText", function()
+    local tools = require("claude-chat.ide.tools")
+    local other = tmp .. "/jump.txt"
+    vim.fn.writefile({ "one", "two", "three" }, other)
+    vim.cmd("enew")
+
+    tools.open_in_editor(other, "three")
+    assert.equals(3, vim.api.nvim_win_get_cursor(0)[1])
+  end)
+
   it("returns a JSON-RPC error for unknown methods", function()
     local reply = call("frobnicate", {})
     assert.is_truthy(reply.error)

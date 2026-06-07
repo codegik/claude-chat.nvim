@@ -158,6 +158,30 @@ function handlers.getDiagnostics(args)
   return text_content(#result == 0 and "[]" or vim.json.encode(result))
 end
 
+-- Open a path in a real editor window (not the chat terminal) and optionally
+-- place the cursor on the first line containing `startText`. Returns a short
+-- status string. Public so the stdio MCP bridge can call it over RPC — that
+-- bridge exposes "open file" to the model, which the internal IDE channel does not.
+function M.open_in_editor(path, startText)
+  if not path or path == "" then
+    return "Error: filePath is required"
+  end
+  vim.api.nvim_set_current_win(pick_editor_window())
+  vim.cmd("edit " .. vim.fn.fnameescape(path))
+
+  if startText and startText ~= "" then
+    local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+    for i, l in ipairs(lines) do
+      local c = l:find(startText, 1, true)
+      if c then
+        pcall(vim.api.nvim_win_set_cursor, 0, { i, c - 1 })
+        break
+      end
+    end
+  end
+  return "Opened " .. path .. " in the editor"
+end
+
 function handlers.openFile(args)
   local path = args.filePath
   if not path then
@@ -175,20 +199,7 @@ function handlers.openFile(args)
     })
   end
 
-  vim.api.nvim_set_current_win(pick_editor_window())
-  vim.cmd("edit " .. vim.fn.fnameescape(path))
-
-  if args.startText and args.startText ~= "" then
-    local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-    for i, l in ipairs(lines) do
-      local c = l:find(args.startText, 1, true)
-      if c then
-        pcall(vim.api.nvim_win_set_cursor, 0, { i, c - 1 })
-        break
-      end
-    end
-  end
-  return text_content("Opened file: " .. path)
+  return text_content(M.open_in_editor(path, args.startText))
 end
 
 function handlers.checkDocumentDirty(args)

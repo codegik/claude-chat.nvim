@@ -24,6 +24,15 @@ M.defaults = {
   -- Claude applies edits without a "Do you want to make this edit?" prompt.
   -- Off by default so nothing is written without an explicit confirmation.
   auto_allow_edits = false,
+  -- Expose an open_file tool to Claude via a small stdio MCP server
+  -- (scripts/mcp_bridge.lua). The IDE channel keeps openFile for itself and
+  -- never offers it to the model, so this is what actually lets you say "open
+  -- the readme" and have it appear in your editor. Set false to disable.
+  open_file_tool = true,
+  -- Steer Claude (via --append-system-prompt) to prefer the open_file tool over
+  -- its Read tool when you ask to "open"/"show" a file. Set false to disable, or
+  -- to a string to use your own instruction.
+  open_in_editor_hint = true,
   -- Log verbosity: "off" | "error" | "warn" | "info" | "debug".
   -- Logs are written to stdpath("log").."/claude-chat.log" (:ClaudeChatLog).
   log_level = "info",

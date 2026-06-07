@@ -1,6 +1,21 @@
 local config = require("claude-chat.config")
 local ide = require("claude-chat.ide")
 
+-- Absolute path to a file shipped with this plugin (relative to its root).
+local function plugin_file(rel)
+  local src = debug.getinfo(1, "S").source:sub(2) -- .../lua/claude-chat/ui.lua
+  return vim.fn.fnamemodify(src, ":h:h:h") .. "/" .. rel
+end
+
+-- This Neovim's RPC address, so a child process can connect back to it.
+local function nvim_rpc_address()
+  local addr = vim.v.servername
+  if addr == nil or addr == "" then
+    addr = vim.fn.serverstart()
+  end
+  return addr
+end
+
 -- The chat sidebar hosts the *interactive* Claude Code TUI inside a terminal
 -- buffer. Because it is the real TUI, everything works exactly like running
 -- `claude` in a terminal: streaming replies, multi-turn, and — crucially —
@@ -55,9 +70,41 @@ local function start_terminal(opts, prime_buf)
     if opts.auto_allow_edits then
       vim.list_extend(allowed, { "Edit", "Write", "MultiEdit" })
     end
+
+    -- The IDE channel does not expose openFile to the model, so run a small
+    -- stdio MCP server (`scripts/mcp_bridge.lua`, via this nvim binary) whose
+    -- open_file tool Claude *can* call. It reaches back into us over RPC.
+    if opts.open_file_tool ~= false then
+      local mcp_cfg = vim.json.encode({
+        mcpServers = {
+          ["claude-chat"] = {
+            type = "stdio",
+            command = vim.v.progpath,
+            args = { "-l", plugin_file("scripts/mcp_bridge.lua") },
+            env = { CLAUDE_CHAT_NVIM = nvim_rpc_address() },
+          },
+        },
+      })
+      table.insert(cmd, "--mcp-config")
+      table.insert(cmd, mcp_cfg)
+      table.insert(allowed, "mcp__claude-chat")
+    end
+
     if #allowed > 0 then
       table.insert(cmd, "--allowedTools")
       vim.list_extend(cmd, allowed)
+    end
+
+    -- Reinforce the open_file tool: "open the readme" should open it in the
+    -- editor, not make Claude read and summarize the file.
+    if opts.open_in_editor_hint then
+      local hint = type(opts.open_in_editor_hint) == "string" and opts.open_in_editor_hint
+        or "When the user asks to open, show, reveal, or go to a file (or a line in a file), "
+          .. "open it in their editor with the open_file tool from the claude-chat MCP server, "
+          .. "rather than reading and summarizing it with the Read tool. Only summarize when "
+          .. "the user explicitly asks for a summary or the file's contents."
+      table.insert(cmd, "--append-system-prompt")
+      table.insert(cmd, hint)
     end
   end
 
