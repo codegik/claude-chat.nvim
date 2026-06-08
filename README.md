@@ -14,35 +14,21 @@ the actual TUI, everything behaves exactly like running `claude` in a terminal:
   cursor/selection, and diagnostics, and can open files and propose diffs (see
   [IDE integration](#ide-integration))
 
-> Earlier versions of this plugin shelled out to `claude -p --continue`. That
-> approach can never show interactive permission prompts: `-p` (print) mode
-> computes one reply and exits, with no live process to ask you anything. Hosting
-> the interactive TUI is the only way to get "Claude asks, you decide".
-
 ## Requirements
 
 - Neovim 0.10+ (uses `jobstart({ term = true })`)
 - The `claude` CLI on your `PATH` (`claude --version`)
 
-## Install (lazy.nvim, local dev)
+## Install (lazy.nvim)
 
-In your lazy setup opts (e.g. `~/.config/nvim/lua/config/lazy.lua`):
-
-```lua
-require("lazy").setup({
-  spec = { ... },
-  dev = { path = "~/sources/codegik", fallback = true },
-})
-```
-
-Then add a spec:
+Add a spec that points at the GitHub repo — lazy.nvim will clone it and keep it
+updated:
 
 ```lua
 -- ~/.config/nvim/lua/plugins/claude-chat.lua
 return {
   {
     "codegik/claude-chat.nvim",
-    dev = true, -- use the local copy in dev.path
     cmd = { "ClaudeChat", "ClaudeChatReset", "ClaudeChatFile" },
     keys = {
       { "<leader>ai", "<cmd>ClaudeChat<cr>", desc = "Claude Chat" },
@@ -55,7 +41,7 @@ return {
 }
 ```
 
-When you publish to GitHub, drop `dev = true` (or `fallback` will clone it).
+Run `:Lazy update` to pull the latest changes.
 
 ## Usage
 
