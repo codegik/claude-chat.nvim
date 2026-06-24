@@ -12,6 +12,10 @@ M.defaults = {
   position = "right",
   -- Working directory for the Claude session. nil = Neovim's current directory.
   cwd = nil,
+  -- When opening the sidebar with no live session, list this directory's past
+  -- Claude sessions in a picker (New session + resume an existing one). Set false
+  -- to always start fresh. :ClaudeChatSessions opens the picker regardless.
+  session_picker = true,
   -- Enter terminal (insert) mode automatically when the sidebar opens.
   start_insert = true,
   -- Run the IDE integration (WebSocket MCP server) so Claude is aware of your

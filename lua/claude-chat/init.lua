@@ -13,6 +13,7 @@ M.open = ui.open
 M.close = ui.close
 M.reset = ui.reset
 M.continue = ui.continue
+M.choose = ui.choose
 M.add_current_file = ui.add_current_file
 
 return M

@@ -29,11 +29,12 @@ updated:
 return {
   {
     "codegik/claude-chat.nvim",
-    cmd = { "ClaudeChat", "ClaudeChatReset", "ClaudeChatFile", "ClaudeChatContinue" },
+    cmd = { "ClaudeChat", "ClaudeChatReset", "ClaudeChatFile", "ClaudeChatContinue", "ClaudeChatSessions" },
     keys = {
-      { "<leader>aii", "<cmd>ClaudeChat<cr>", desc = "Claude Chat: toggle sidebar" },
-      { "<leader>aic", "<cmd>ClaudeChatContinue<cr>", desc = "Claude Chat: continue last conversation" },
-      { "<leader>aif", "<cmd>ClaudeChatFile<cr>", desc = "Claude Chat: add current file" },
+      { "<leader>ai", "<cmd>ClaudeChat<cr>", desc = "Claude Chat: toggle sidebar" },
+      { "<leader>ac", "<cmd>ClaudeChatContinue<cr>", desc = "Claude Chat: continue last conversation" },
+      { "<leader>as", "<cmd>ClaudeChatSessions<cr>", desc = "Claude Chat: pick a past session" },
+      { "<leader>af", "<cmd>ClaudeChatFile<cr>", desc = "Claude Chat: add current file" },
     },
     config = function()
       require("claude-chat").setup()
@@ -46,18 +47,19 @@ Run `:Lazy update` to pull the latest changes.
 
 ## Usage
 
-| Action | Command / key |
-|--------|---------------|
-| Toggle the sidebar | `:ClaudeChat` (or `<leader>aii`) |
-| Continue the most recent conversation | `:ClaudeChatContinue` (or `<leader>aic`) |
-| Add the current file to Claude's context | `:ClaudeChatFile` (or `<leader>aif`) |
-| Talk to Claude | Just type in the terminal — it's the normal Claude TUI |
-| Answer a permission prompt | Use the keys the prompt shows (e.g. `y`/`n`, arrows + `<CR>`) |
-| Back to the editor / other window | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` |
-| Resize the sidebar | `<C-Left>` / `<C-Right>` (and `<C-Up>` / `<C-Down>`) |
-| Hide the sidebar (Claude keeps running) | `<C-q>` |
-| Leave terminal mode (to scroll/copy) | `<C-\><C-n>`, then normal Neovim keys |
-| New conversation | `:ClaudeChatReset` |
+| Action                                   | Command / key                                                 |
+| ---------------------------------------- | ------------------------------------------------------------- |
+| Toggle the sidebar                       | `:ClaudeChat` (or `<leader>ai`)                               |
+| Continue the most recent conversation    | `:ClaudeChatContinue` (or `<leader>ac`)                       |
+| Pick a past session for this directory   | `:ClaudeChatSessions` (or `<leader>as`)                       |
+| Add the current file to Claude's context | `:ClaudeChatFile` (or `<leader>af`)                           |
+| Talk to Claude                           | Just type in the terminal — it's the normal Claude TUI        |
+| Answer a permission prompt               | Use the keys the prompt shows (e.g. `y`/`n`, arrows + `<CR>`) |
+| Back to the editor / other window        | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>`                         |
+| Resize the sidebar                       | `<C-Left>` / `<C-Right>` (and `<C-Up>` / `<C-Down>`)          |
+| Hide the sidebar (Claude keeps running)  | `<C-q>`                                                       |
+| Leave terminal mode (to scroll/copy)     | `<C-\><C-n>`, then normal Neovim keys                         |
+| New conversation                         | `:ClaudeChatReset`                                            |
 
 The sidebar is a real terminal, so by default every keystroke goes to Claude. The
 keys above are the exception: they are terminal-mode mappings (scoped to the Claude
@@ -68,6 +70,13 @@ configurable (see below) — set one to `false` to free that key for Claude.
 Navigating away with `<C-h>` and back with `<C-l>` keeps the conversation running;
 you return to the same live session and land straight in insert mode. Toggling the
 sidebar closed only **hides** it. `:ClaudeChatReset` stops the process and starts fresh.
+
+When you open the sidebar with no live session and this directory already has past
+Claude conversations, `:ClaudeChat` shows a picker (Claude's own persisted sessions
+from `~/.claude/projects/`, listed by title and recency) so you can resume one or pick
+**New session**. With a session already running, or in a directory with no history, it
+just opens — no prompt. Set `session_picker = false` to always start fresh; either way
+`:ClaudeChatSessions` opens the picker on demand. Resuming runs `claude --resume <id>`.
 
 ## Configuration
 
@@ -80,6 +89,7 @@ require("claude-chat").setup({
   width = 80,           -- sidebar width
   position = "right",   -- "right" | "left"
   cwd = nil,            -- working dir for the session (nil = Neovim's cwd)
+  session_picker = true, -- on open with no live session, list this dir's past sessions
   start_insert = true,  -- enter terminal mode when the sidebar opens
   ide_integration = true, -- editor awareness via the WebSocket MCP server
   auto_allow_ide_tools = true, -- pass --allowedTools mcp__ide (no per-call prompt)
@@ -101,8 +111,8 @@ on whatever folder you launched Neovim from (override with `cwd`).
 
 When the sidebar opens, the plugin starts a small **WebSocket MCP server** (the
 same protocol Claude's VS Code/JetBrains extensions use) so Claude is aware of
-your editor — no `@`-mention needed. You can just ask *"what file am I in?"* or
-*"explain the function I'm looking at"* and Claude knows.
+your editor — no `@`-mention needed. You can just ask _"what file am I in?"_ or
+_"explain the function I'm looking at"_ and Claude knows.
 
 How it works:
 
@@ -123,14 +133,14 @@ Claude connecting is fully automatic — you never run anything by hand.
 
 ### Opening files in the editor
 
-Asking *"open the readme"* should put the file in your editor — but Claude Code's
+Asking _"open the readme"_ should put the file in your editor — but Claude Code's
 IDE channel keeps `openFile` for its **own** use and never offers it to the model
 (the only IDE tools the model can call are `getDiagnostics` and `executeCode`).
 Left alone, Claude just reads and summarizes the file instead.
 
 So the plugin also runs a **separate stdio MCP server** (`scripts/mcp_bridge.lua`,
 launched with the same `nvim` binary) that exposes an `open_file` tool the model
-*can* call. When invoked, it connects back to your running Neovim over RPC and
+_can_ call. When invoked, it connects back to your running Neovim over RPC and
 opens the file in a real editor window. It's pre-approved via
 `--allowedTools mcp__claude-chat`, and a short system-prompt hint nudges Claude to
 prefer it over `Read` for "open/show/go to" requests. Turn either off with
@@ -173,10 +183,10 @@ round-trip through the server).
 
 Developed and tested on:
 
-| Component | Value |
-|-----------|-------|
-| OS / WM | Arch Linux (Omarchy) + Hyprland |
-| Terminal | Alacritty |
-| Neovim | 0.12.2 |
-| Plugin manager | lazy.nvim (LazyVim distro) |
-| `claude` CLI | 2.1.x |
+| Component      | Value                           |
+| -------------- | ------------------------------- |
+| OS / WM        | Arch Linux (Omarchy) + Hyprland |
+| Terminal       | Alacritty                       |
+| Neovim         | 0.12.2                          |
+| Plugin manager | lazy.nvim (LazyVim distro)      |
+| `claude` CLI   | 2.1.x                           |

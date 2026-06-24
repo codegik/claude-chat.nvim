@@ -1,5 +1,6 @@
 local config = require("claude-chat.config")
 local ide = require("claude-chat.ide")
+local sessions = require("claude-chat.sessions")
 
 -- Absolute path to a file shipped with this plugin (relative to its root).
 local function plugin_file(rel)
@@ -263,12 +264,61 @@ function M.close()
   M.win = nil
 end
 
-function M.toggle()
-  if M.is_open() then
-    M.close()
+function M.pick(entries)
+  local now = os.time()
+  local choices = { { title = "✦ New session" } }
+  vim.list_extend(choices, entries)
+
+  vim.ui.select(choices, {
+    prompt = "Claude session:",
+    format_item = function(item)
+      if not item.id then
+        return item.title
+      end
+      return string.format("%-70s  %s", item.title, sessions.reltime(item.mtime, now))
+    end,
+  }, function(choice)
+    if not choice then
+      return
+    end
+    if choice.id then
+      M.open({ "--resume", choice.id })
+    else
+      M.open()
+    end
+  end)
+end
+
+function M.choose()
+  local opts = config.ensure()
+  if session_alive() then
+    M.open()
+    return
+  end
+  local entries = sessions.list(opts.cwd or vim.fn.getcwd())
+  if #entries > 0 then
+    M.pick(entries)
   else
     M.open()
   end
+end
+
+function M.toggle()
+  if M.is_open() then
+    M.close()
+    return
+  end
+
+  local opts = config.ensure()
+  if opts.session_picker ~= false and not session_alive() then
+    local entries = sessions.list(opts.cwd or vim.fn.getcwd())
+    if #entries > 0 then
+      M.pick(entries)
+      return
+    end
+  end
+
+  M.open()
 end
 
 -- Stop the current Claude process and start a brand-new session.
