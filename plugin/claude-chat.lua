@@ -14,6 +14,10 @@ vim.api.nvim_create_user_command("ClaudeChatReset", function()
   require("claude-chat.ui").reset()
 end, { desc = "Reset the Claude chat session (next message starts fresh)" })
 
+vim.api.nvim_create_user_command("ClaudeChatContinue", function()
+  require("claude-chat.ui").continue()
+end, { desc = "Open the chat resuming the most recent conversation (claude --continue)" })
+
 vim.api.nvim_create_user_command("ClaudeChatFile", function()
   require("claude-chat.ui").add_current_file()
 end, { desc = "Send the current file to Claude as an @-mention" })

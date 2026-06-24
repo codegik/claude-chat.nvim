@@ -47,7 +47,7 @@ local function open_window(opts)
   vim.wo[M.win].winbar = " Claude"
 end
 
-local function start_terminal(opts, prime_buf)
+local function start_terminal(opts, prime_buf, extra_cli_args)
   -- The current buffer becomes the terminal, so create one and show it first.
   M.buf = vim.api.nvim_create_buf(false, false)
   vim.api.nvim_win_set_buf(M.win, M.buf)
@@ -110,6 +110,12 @@ local function start_terminal(opts, prime_buf)
 
   vim.list_extend(cmd, opts.extra_args)
 
+  -- Per-launch CLI args (e.g. "--continue" from ClaudeChatContinue), appended
+  -- after the configured extra_args so they take precedence.
+  if extra_cli_args then
+    vim.list_extend(cmd, extra_cli_args)
+  end
+
   M.job = vim.fn.jobstart(cmd, {
     term = true,
     cwd = cwd,
@@ -163,7 +169,9 @@ local function start_terminal(opts, prime_buf)
 end
 
 -- Opens/focuses the sidebar. Returns true if a fresh Claude session was launched.
-function M.open()
+-- extra_cli_args is an optional list of args appended to this launch only (used
+-- when a fresh TUI is started, e.g. { "--continue" }).
+function M.open(extra_cli_args)
   local opts = config.ensure()
   local started = false
 
@@ -179,7 +187,7 @@ function M.open()
     if session_alive() then
       vim.api.nvim_win_set_buf(M.win, M.buf)
     else
-      start_terminal(opts, prime_buf)
+      start_terminal(opts, prime_buf, extra_cli_args)
       started = true
     end
   end
@@ -280,6 +288,23 @@ function M.reset()
   if was_open then
     M.open()
   end
+end
+
+-- Launch a fresh Claude session that resumes the most recent conversation
+-- (`claude --continue`). Because --continue starts a new process, any live
+-- session is stopped first, mirroring reset().
+function M.continue()
+  if M.job then
+    vim.fn.jobstop(M.job)
+    M.job = nil
+  end
+  M.close()
+  if M.buf and vim.api.nvim_buf_is_valid(M.buf) then
+    vim.api.nvim_buf_delete(M.buf, { force = true })
+  end
+  M.buf = nil
+
+  M.open({ "--continue" })
 end
 
 return M

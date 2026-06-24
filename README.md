@@ -29,10 +29,11 @@ updated:
 return {
   {
     "codegik/claude-chat.nvim",
-    cmd = { "ClaudeChat", "ClaudeChatReset", "ClaudeChatFile" },
+    cmd = { "ClaudeChat", "ClaudeChatReset", "ClaudeChatFile", "ClaudeChatContinue" },
     keys = {
       { "<leader>ai", "<cmd>ClaudeChat<cr>", desc = "Claude Chat" },
-      { "<leader>af", "<cmd>ClaudeChatFile<cr>", desc = "Claude Chat: add current file" },
+      { "<leader>aic", "<cmd>ClaudeChatContinue<cr>", desc = "Claude Chat: continue last conversation" },
+      { "<leader>aif", "<cmd>ClaudeChatFile<cr>", desc = "Claude Chat: add current file" },
     },
     config = function()
       require("claude-chat").setup()
@@ -48,7 +49,8 @@ Run `:Lazy update` to pull the latest changes.
 | Action | Command / key |
 |--------|---------------|
 | Toggle the sidebar | `:ClaudeChat` (or `<leader>ai`) |
-| Add the current file to Claude's context | `:ClaudeChatFile` (or `<leader>af`) |
+| Continue the most recent conversation | `:ClaudeChatContinue` (or `<leader>aic`) |
+| Add the current file to Claude's context | `:ClaudeChatFile` (or `<leader>aif`) |
 | Talk to Claude | Just type in the terminal — it's the normal Claude TUI |
 | Answer a permission prompt | Use the keys the prompt shows (e.g. `y`/`n`, arrows + `<CR>`) |
 | Back to the editor / other window | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` |
