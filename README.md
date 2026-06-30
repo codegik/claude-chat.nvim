@@ -138,13 +138,62 @@ IDE channel keeps `openFile` for its **own** use and never offers it to the mode
 (the only IDE tools the model can call are `getDiagnostics` and `executeCode`).
 Left alone, Claude just reads and summarizes the file instead.
 
-So the plugin also runs a **separate stdio MCP server** (`scripts/mcp_bridge.lua`,
-launched with the same `nvim` binary) that exposes an `open_file` tool the model
-_can_ call. When invoked, it connects back to your running Neovim over RPC and
-opens the file in a real editor window. It's pre-approved via
-`--allowedTools mcp__claude-chat`, and a short system-prompt hint nudges Claude to
-prefer it over `Read` for "open/show/go to" requests. Turn either off with
-`open_file_tool = false` / `open_in_editor_hint = false`.
+So the plugin also hosts a **second MCP server inside Neovim**
+(`lua/claude-chat/mcp_http.lua`), registered with the CLI by URL
+(`--mcp-config` with `type: "http"`). Claude's MCP client connects to it over
+HTTP and the tools run in-process against the editor — no child process:
+
+- `open_file` — opens a file in a real editor window. A short system-prompt hint
+  nudges Claude to prefer it over `Read` for "open/show/go to" requests.
+- `current_file` — asks the editor which file you currently have open, returning
+  the absolute path, cursor position, and any selected text — so Claude can
+  answer _"what file am I looking at?"_ rather than guessing.
+
+Both are pre-approved via `--allowedTools mcp__claude-chat`. The server binds to
+localhost only and rejects any request whose `Authorization` bearer token
+doesn't match the per-session token. Turn it off with `open_file_tool = false`,
+or drop the open-file hint with `open_in_editor_hint = false`.
+
+### Semantic code intelligence (LSP)
+
+Claude Code in its own sandbox has **no language server** — it finds references
+by grepping and jumps to definitions by guessing, and the IDE channel offers the
+model nothing here either (only `getDiagnostics`). This plugin bridges your
+editor's **live LSP** to the model over the same in-process MCP server, so Claude
+gets accurate, semantic navigation instead of text search:
+
+- `lsp_definition` — where a symbol is defined (exact, across the project and
+  into dependencies).
+- `lsp_references` — every reference to a symbol — no false hits in comments or
+  strings, resolves overloads/dynamic dispatch that grep misses.
+- `lsp_hover` — the symbol's real resolved type, signature, and doc comment.
+- `lsp_document_symbols` — a structural outline of a file.
+- `lsp_workspace_symbols` — project-wide symbol search by name.
+
+A symbol is addressed by name (`{ filePath, symbol, line? }`); the plugin loads
+the file, lets your LSP attach, resolves the position, and forwards the request.
+If no language server is attached for the filetype, the tool says so rather than
+guessing. These ride the same MCP server as the open-file tools, so they need
+`open_file_tool` enabled; turn just the LSP tools off with `lsp_tools = false`.
+
+**Why this matters:**
+
+- **Accuracy over guesswork.** A grep for `start` matches comments, strings, and
+  every unrelated `start` in the project; `lsp_references` returns the *actual*
+  references to the symbol you mean — and finds the ones grep misses, like calls
+  through dynamic dispatch, overloads, or re-exports.
+- **Fewer wrong edits.** When Claude knows every real call site before it changes
+  a signature, it updates all of them and skips the false matches — instead of a
+  find-and-replace that breaks a string literal or misses a caller in another file.
+- **Real types, not inferred ones.** `lsp_hover` gives the language server's
+  resolved signature and docs, so Claude reasons from the truth rather than
+  pattern-matching the surrounding code (which is where hallucinated APIs come from).
+- **Cheaper and faster.** One LSP request returns the exact locations; the
+  alternative is Claude reading many files to reconstruct what the language server
+  already knows, burning tokens and turns to arrive at a less reliable answer.
+- **Your toolchain, for free.** It uses whatever language servers you already have
+  configured in Neovim — every language, no extra setup, no servers running in
+  Claude's sandbox.
 
 ### Editing
 

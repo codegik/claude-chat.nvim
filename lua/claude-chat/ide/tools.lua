@@ -160,8 +160,8 @@ end
 
 -- Open a path in a real editor window (not the chat terminal) and optionally
 -- place the cursor on the first line containing `startText`. Returns a short
--- status string. Public so the stdio MCP bridge can call it over RPC — that
--- bridge exposes "open file" to the model, which the internal IDE channel does not.
+-- status string. Public so the in-process HTTP MCP server can call it — that
+-- server exposes "open file" to the model, which the internal IDE channel does not.
 function M.open_in_editor(path, startText)
   if not path or path == "" then
     return "Error: filePath is required"
@@ -180,6 +180,50 @@ function M.open_in_editor(path, startText)
     end
   end
   return "Opened " .. path .. " in the editor"
+end
+
+-- Report the file the user is currently looking at: absolute path, cursor
+-- position, and any selected text. Public so the in-process HTTP MCP server can
+-- call it — it's the inverse of open_in_editor, letting Claude ask the editor
+-- "what file is open?" the same way open_file lets it open one. Returns a JSON
+-- string (so the server can hand it straight back).
+function M.current_file()
+  local cur = selection.get()
+  local buf = active_editor_buf()
+  if not buf then
+    if cur then
+      return vim.json.encode({
+        success = true,
+        filePath = cur.filePath,
+        cursor = { line = cur.selection.start.line + 1, character = cur.selection.start.character },
+        selectionText = (cur.text ~= "" and cur.text) or nil,
+      })
+    end
+    return vim.json.encode({ success = false, message = "No file is currently open in the editor" })
+  end
+
+  local path = vim.api.nvim_buf_get_name(buf)
+  local cwd = vim.fn.getcwd()
+  local result = {
+    success = true,
+    filePath = path,
+    relativePath = (vim.fs.relpath and vim.fs.relpath(cwd, path)) or vim.fn.fnamemodify(path, ":."),
+    languageId = vim.bo[buf].filetype,
+    isDirty = vim.bo[buf].modified,
+  }
+  -- Use the tracked selection (cursor/selected text) when it's for this buffer;
+  -- otherwise read the cursor straight from the buffer's window.
+  if cur and cur.filePath == path then
+    result.cursor = { line = cur.selection.start.line + 1, character = cur.selection.start.character }
+    result.selectionText = (cur.text ~= "" and cur.text) or nil
+  else
+    local win = vim.fn.bufwinid(buf)
+    if win ~= -1 then
+      local c = vim.api.nvim_win_get_cursor(win)
+      result.cursor = { line = c[1], character = c[2] }
+    end
+  end
+  return vim.json.encode(result)
 end
 
 function handlers.openFile(args)

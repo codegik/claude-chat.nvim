@@ -126,7 +126,7 @@ describe("ide.server (live socket)", function()
     assert.is_true(result.accept_ok, "expected correct Sec-WebSocket-Accept")
     assert.equals(1, #result.messages)
     assert.equals(1, result.messages[1].id)
-    assert.equals("2025-03-26", result.messages[1].result.protocolVersion)
+    assert.equals("2025-06-18", result.messages[1].result.protocolVersion)
   end)
 
   it("answers a tools/call over the socket", function()

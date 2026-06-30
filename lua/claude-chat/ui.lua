@@ -1,21 +1,7 @@
 local config = require("claude-chat.config")
 local ide = require("claude-chat.ide")
+local mcp_http = require("claude-chat.mcp_http")
 local sessions = require("claude-chat.sessions")
-
--- Absolute path to a file shipped with this plugin (relative to its root).
-local function plugin_file(rel)
-  local src = debug.getinfo(1, "S").source:sub(2) -- .../lua/claude-chat/ui.lua
-  return vim.fn.fnamemodify(src, ":h:h:h") .. "/" .. rel
-end
-
--- This Neovim's RPC address, so a child process can connect back to it.
-local function nvim_rpc_address()
-  local addr = vim.v.servername
-  if addr == nil or addr == "" then
-    addr = vim.fn.serverstart()
-  end
-  return addr
-end
 
 -- The chat sidebar hosts the *interactive* Claude Code TUI inside a terminal
 -- buffer. Because it is the real TUI, everything works exactly like running
@@ -72,23 +58,26 @@ local function start_terminal(opts, prime_buf, extra_cli_args)
       vim.list_extend(allowed, { "Edit", "Write", "MultiEdit" })
     end
 
-    -- The IDE channel does not expose openFile to the model, so run a small
-    -- stdio MCP server (`scripts/mcp_bridge.lua`, via this nvim binary) whose
-    -- open_file tool Claude *can* call. It reaches back into us over RPC.
+    -- The IDE channel does not expose openFile to the model, so host an MCP
+    -- server inside this Neovim and register it by URL; its open_file tool
+    -- Claude *can* call. Claude's MCP client connects back over HTTP and the
+    -- tools run in-process against the editor.
     if opts.open_file_tool ~= false then
-      local mcp_cfg = vim.json.encode({
-        mcpServers = {
-          ["claude-chat"] = {
-            type = "stdio",
-            command = vim.v.progpath,
-            args = { "-l", plugin_file("scripts/mcp_bridge.lua") },
-            env = { CLAUDE_CHAT_NVIM = nvim_rpc_address() },
+      local port, token = mcp_http.start({ lsp = opts.lsp_tools ~= false })
+      if port then
+        local mcp_cfg = vim.json.encode({
+          mcpServers = {
+            ["claude-chat"] = {
+              type = "http",
+              url = string.format("http://127.0.0.1:%d/mcp", port),
+              headers = { Authorization = "Bearer " .. token },
+            },
           },
-        },
-      })
-      table.insert(cmd, "--mcp-config")
-      table.insert(cmd, mcp_cfg)
-      table.insert(allowed, "mcp__claude-chat")
+        })
+        table.insert(cmd, "--mcp-config")
+        table.insert(cmd, mcp_cfg)
+        table.insert(allowed, "mcp__claude-chat")
+      end
     end
 
     if #allowed > 0 then
@@ -125,6 +114,7 @@ local function start_terminal(opts, prime_buf, extra_cli_args)
       M.job = nil
       if opts.ide_integration ~= false then
         ide.stop()
+        mcp_http.stop()
       end
     end,
   })

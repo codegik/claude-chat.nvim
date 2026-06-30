@@ -41,7 +41,7 @@ describe("ide.mcp + tools", function()
 
   it("initialize returns protocol version and server info", function()
     local r = call("initialize", {}).result
-    assert.equals("2025-03-26", r.protocolVersion)
+    assert.equals("2025-06-18", r.protocolVersion)
     assert.equals("claude-chat.nvim", r.serverInfo.name)
     assert.is_truthy(r.capabilities.tools)
   end)
@@ -126,6 +126,15 @@ describe("ide.mcp + tools", function()
 
     tools.open_in_editor(other, "three")
     assert.equals(3, vim.api.nvim_win_get_cursor(0)[1])
+  end)
+
+  it("current_file reports the open file (the http server's tool target)", function()
+    local tools = require("claude-chat.ide.tools")
+    local data = vim.json.decode(tools.current_file())
+    assert.is_true(data.success)
+    assert.equals(vim.fs.normalize(file), vim.fs.normalize(data.filePath))
+    assert.equals("README.md", data.relativePath)
+    assert.is_truthy(data.cursor)
   end)
 
   it("returns a JSON-RPC error for unknown methods", function()

@@ -28,11 +28,17 @@ M.defaults = {
   -- Claude applies edits without a "Do you want to make this edit?" prompt.
   -- Off by default so nothing is written without an explicit confirmation.
   auto_allow_edits = false,
-  -- Expose an open_file tool to Claude via a small stdio MCP server
-  -- (scripts/mcp_bridge.lua). The IDE channel keeps openFile for itself and
-  -- never offers it to the model, so this is what actually lets you say "open
-  -- the readme" and have it appear in your editor. Set false to disable.
+  -- Expose an open_file tool to Claude via an in-process HTTP MCP server
+  -- (lua/claude-chat/mcp_http.lua). The IDE channel keeps openFile for itself
+  -- and never offers it to the model, so this is what actually lets you say
+  -- "open the readme" and have it appear in your editor. Set false to disable.
   open_file_tool = true,
+  -- Expose the editor's live language server to Claude as model-callable tools
+  -- (lsp_definition, lsp_references, lsp_hover, lsp_document_symbols,
+  -- lsp_workspace_symbols). Gives Claude semantic code navigation it can't get
+  -- from grep or the IDE channel. Rides the same MCP server as open_file_tool,
+  -- so it has no effect when that is disabled. Set false to disable.
+  lsp_tools = true,
   -- Steer Claude (via --append-system-prompt) to prefer the open_file tool over
   -- its Read tool when you ask to "open"/"show" a file. Set false to disable, or
   -- to a string to use your own instruction.

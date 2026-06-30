@@ -4,7 +4,7 @@ local log = require("claude-chat.log")
 
 local M = {}
 
-local PROTOCOL_VERSION = "2025-03-26"
+local PROTOCOL_VERSION = "2025-06-18"
 
 function M.handle(client, msg)
   local method = msg.method
