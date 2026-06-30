@@ -32,8 +32,6 @@ return {
     cmd = { "ClaudeChat", "ClaudeChatReset", "ClaudeChatFile", "ClaudeChatContinue", "ClaudeChatSessions" },
     keys = {
       { "<leader>ai", "<cmd>ClaudeChat<cr>", desc = "Claude Chat: toggle sidebar" },
-      { "<leader>ac", "<cmd>ClaudeChatContinue<cr>", desc = "Claude Chat: continue last conversation" },
-      { "<leader>as", "<cmd>ClaudeChatSessions<cr>", desc = "Claude Chat: pick a past session" },
       { "<leader>af", "<cmd>ClaudeChatFile<cr>", desc = "Claude Chat: add current file" },
     },
     config = function()
@@ -50,8 +48,6 @@ Run `:Lazy update` to pull the latest changes.
 | Action                                   | Command / key                                                 |
 | ---------------------------------------- | ------------------------------------------------------------- |
 | Toggle the sidebar                       | `:ClaudeChat` (or `<leader>ai`)                               |
-| Continue the most recent conversation    | `:ClaudeChatContinue` (or `<leader>ac`)                       |
-| Pick a past session for this directory   | `:ClaudeChatSessions` (or `<leader>as`)                       |
 | Add the current file to Claude's context | `:ClaudeChatFile` (or `<leader>af`)                           |
 | Talk to Claude                           | Just type in the terminal — it's the normal Claude TUI        |
 | Answer a permission prompt               | Use the keys the prompt shows (e.g. `y`/`n`, arrows + `<CR>`) |
@@ -179,7 +175,7 @@ guessing. These ride the same MCP server as the open-file tools, so they need
 **Why this matters:**
 
 - **Accuracy over guesswork.** A grep for `start` matches comments, strings, and
-  every unrelated `start` in the project; `lsp_references` returns the *actual*
+  every unrelated `start` in the project; `lsp_references` returns the _actual_
   references to the symbol you mean — and finds the ones grep misses, like calls
   through dynamic dispatch, overloads, or re-exports.
 - **Fewer wrong edits.** When Claude knows every real call site before it changes
