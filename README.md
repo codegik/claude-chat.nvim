@@ -2,6 +2,8 @@
 
 A Neovim sidebar that hosts the **interactive [Claude Code](https://claude.com/claude-code) TUI**.
 
+![Demo](assets/demo.gif)
+
 It does not use the Anthropic API and it does not wrap `claude -p`. Instead it
 runs the real `claude` terminal UI inside a Neovim terminal buffer. Because it is
 the actual TUI, everything behaves exactly like running `claude` in a terminal:
@@ -102,6 +104,46 @@ require("claude-chat").setup({
 
 Because Claude runs in Neovim's working directory, "build/test the project" acts
 on whatever folder you launched Neovim from (override with `cwd`).
+
+## Architecture
+
+The key idea is that the real `claude` CLI runs as a **child process inside a
+Neovim terminal buffer** — what you see in the sidebar is the actual TUI. Neovim
+launches it, and the CLI connects *back* to Neovim over **two MCP servers** so it
+becomes aware of (and can drive) your editor:
+
+```mermaid
+flowchart TB
+    subgraph nvim["Neovim process (claude-chat.nvim)"]
+        ui["UI / sidebar<br/>(ui.lua)"]
+        term["Terminal buffer<br/>(hosts the Claude TUI)"]
+        ws["WebSocket MCP server<br/>(ide/server.lua) — IDE channel"]
+        http["HTTP MCP server<br/>(mcp_http.lua) — in-process tools"]
+        editor[("Your buffers,<br/>cursor, LSP,<br/>diagnostics")]
+    end
+
+    cli["claude CLI<br/>(child process)"]
+
+    ui -- "jobstart: env (CLAUDE_CODE_SSE_PORT,<br/>ENABLE_IDE_INTEGRATION) + args<br/>(--mcp-config http URL, --allowedTools)" --> cli
+    cli -- "renders into" --> term
+
+    cli -. "discovers via ~/.claude/ide/&lt;port&gt;.lock,<br/>auth token; WebSocket" .-> ws
+    ws -. "push selection_changed;<br/>getDiagnostics, openDiff, openFile…" .-> editor
+
+    cli -. "HTTP + Bearer token" .-> http
+    http -. "open_file, current_file,<br/>lsp_definition / references / hover…" .-> editor
+```
+
+- **Solid arrows** = process launch and rendering: Neovim spawns the CLI and the
+  CLI's TUI is drawn into the terminal buffer.
+- **Dotted arrows** = the two MCP channels the CLI dials back on. The **WebSocket
+  channel** is the same protocol Claude's VS Code/JetBrains extensions speak
+  (discovered through a lock file in `~/.claude/ide/`). The **HTTP channel** is a
+  second server Neovim hosts in-process to expose tools the IDE channel withholds
+  from the model — `open_file`, `current_file`, and the LSP bridge.
+
+Both channels bind to `127.0.0.1` only and reject any request without the
+per-session auth token. Details for each follow below.
 
 ## IDE integration
 
