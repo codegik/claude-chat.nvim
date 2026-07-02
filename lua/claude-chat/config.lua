@@ -53,6 +53,10 @@ M.defaults = {
   keymaps = {
     -- Hide the sidebar without stopping Claude.
     hide = "<C-q>",
+    -- Leave terminal mode for normal mode, so you can scroll and select in the
+    -- Claude history. A single <Esc> still reaches Claude; press it twice. Get
+    -- back to typing with i/a (or just enter the window again).
+    normal = "<Esc><Esc>",
     -- Move focus to another window (e.g. back to the editor).
     nav = {
       left = "<C-h>",

@@ -56,7 +56,7 @@ Run `:Lazy update` to pull the latest changes.
 | Back to the editor / other window        | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>`                         |
 | Resize the sidebar                       | `<C-Left>` / `<C-Right>` (and `<C-Up>` / `<C-Down>`)          |
 | Hide the sidebar (Claude keeps running)  | `<C-q>`                                                       |
-| Leave terminal mode (to scroll/copy)     | `<C-\><C-n>`, then normal Neovim keys                         |
+| Leave terminal mode (to scroll/copy)     | `<Esc><Esc>`, then normal Neovim keys (`i`/`a` to type again) |
 | New conversation                         | `:ClaudeChatReset`                                            |
 
 The sidebar is a real terminal, so by default every keystroke goes to Claude. The
@@ -96,6 +96,7 @@ require("claude-chat").setup({
   open_in_editor_hint = true, -- nudge Claude to prefer open_file over its Read tool
   keymaps = {           -- terminal-mode keys, scoped to the Claude buffer
     hide = "<C-q>",
+    normal = "<Esc><Esc>",  -- leave terminal mode to scroll/select history
     nav = { left = "<C-h>", down = "<C-j>", up = "<C-k>", right = "<C-l>" },
     resize = { left = "<C-Left>", right = "<C-Right>", up = "<C-Up>", down = "<C-Down>" },
   },

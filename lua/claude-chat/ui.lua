@@ -133,6 +133,10 @@ local function start_terminal(opts, prime_buf, extra_cli_args)
     M.close()
   end)
 
+  -- Drop out of terminal mode into normal mode, so the history is a normal
+  -- buffer you can scroll and visually select. Return to typing with i/a.
+  tmap(km.normal, "<C-\\><C-n>")
+
   -- Move focus to another window (leaves the terminal; lands in the target window).
   tmap(km.nav.left, "<Cmd>wincmd h<CR>")
   tmap(km.nav.down, "<Cmd>wincmd j<CR>")
